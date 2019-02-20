@@ -6,13 +6,67 @@ from collections import defaultdict
 from datetime import datetime, date, time, timedelta
 import itertools
 
+from django.conf.urls import url
 from django.db.models.query import QuerySet
 from django.utils.safestring import mark_safe
 from django.utils.encoding import python_2_unicode_compatible
 
 from dateutil import rrule
 from .conf import swingtime_settings
-from .models import EventType, Occurrence
+
+
+def make_urlpatterns(views, event_class, occurrence_class, event_type_class):
+    day_kwargs = {
+        'occurrence_class': occurrence_class,
+        'event_type_class': event_type_class
+    }
+
+    return [
+        url(
+            r'^(?:calendar/)?$',
+            views.today_view,
+            name='swingtime-today',
+            kwargs=day_kwargs
+        ),
+        url(
+            r'^calendar/(?P<year>\d{4})/$',
+            views.year_view,
+            name='swingtime-yearly-view',
+            kwargs={'occurrence_class': occurrence_class}
+        ),
+        url(
+            r'^calendar/(\d{4})/(0?[1-9]|1[012])/$',
+            views.month_view,
+            name='swingtime-monthly-view',
+            kwargs={'occurrence_class': occurrence_class}
+        ),
+        url(
+            r'^calendar/(\d{4})/(0?[1-9]|1[012])/([0-3]?\d)/$',
+            views.day_view,
+            name='swingtime-daily-view',
+            kwargs=day_kwargs
+        ),
+        url(
+            r'^events/$',
+            views.event_listing,
+            name='swingtime-events',
+            kwargs={'event_class': event_class}
+        ),
+        url(r'^events/add/$', views.add_event, name='swingtime-add-event'),
+        url(
+            r'^events/(\d+)/$',
+            views.event_view,
+            name='swingtime-event',
+            kwargs={'event_class': event_class}
+
+        ),
+        url(
+            r'^events/(\d+)/(\d+)/$',
+            views.occurrence_view,
+            name='swingtime-occurrence',
+            kwargs={'occurrence_class': occurrence_class}
+        ),
+    ]
 
 
 def time_delta_total_seconds(time_delta):
@@ -40,7 +94,7 @@ def default_css_class_cycler():
     return itertools.cycle(('evt-even', 'evt-odd'))
 
 
-def css_class_cycler():
+def css_class_cycler(event_types):
     '''
     Return a dictionary keyed by ``EventType`` abbreviations, whose values are an
     iterable or cycle of CSS class names.
@@ -49,7 +103,7 @@ def css_class_cycler():
     FMT = 'evt-{0}-{1}'.format
     return defaultdict(default_css_class_cycler, (
         (e.abbr, itertools.cycle((FMT(e.abbr, 'even'), FMT(e.abbr, 'odd'))))
-        for e in EventType.objects.all()
+        for e in event_types
     ))
 
 
@@ -100,7 +154,9 @@ def create_timeslot_table(
     time_delta=swingtime_settings.TIMESLOT_INTERVAL,
     min_columns=swingtime_settings.TIMESLOT_MIN_COLUMNS,
     css_class_cycles=css_class_cycler,
-    proxy_class=DefaultOccurrenceProxy
+    proxy_class=DefaultOccurrenceProxy,
+    occurrence_class=None,
+    event_type_class=None
 ):
     '''
     Create a grid-like object representing a sequence of times (rows) and
@@ -134,7 +190,7 @@ def create_timeslot_table(
     if isinstance(items, QuerySet):
         items = items._clone()
     elif not items:
-        items = Occurrence.objects.daily_occurrences(dt).select_related('event')
+        items = occurrence_class.objects.daily_occurrences(dt).select_related('event')
 
     # build a mapping of timeslot "buckets"
     timeslots = {}
@@ -192,7 +248,10 @@ def create_timeslot_table(
     empty_columns = ['' for x in column_range]
 
     if css_class_cycles:
-        column_classes = dict([(i, css_class_cycles()) for i in column_range])
+        column_classes = {
+            i: css_class_cycles(event_type_class.objects.all())
+            for i in column_range
+        }
     else:
         column_classes = None
 

@@ -8,7 +8,6 @@ from django.db import models
 from django.template.context import RequestContext
 from django.shortcuts import get_object_or_404, render
 
-from .models import Event, Occurrence
 from . import utils, forms
 from .conf import swingtime_settings
 
@@ -21,6 +20,7 @@ def event_listing(
     request,
     template='swingtime/event_list.html',
     events=None,
+    event_class=None,
     **extra_context
 ):
     '''
@@ -35,7 +35,7 @@ def event_listing(
 
     ... plus all values passed in via **extra_context
     '''
-    events = events or Event.objects.all()
+    events = events or event_class.objects.all()
     extra_context['events'] = events
     return render(request, template, extra_context)
 
@@ -45,7 +45,8 @@ def event_view(
     pk,
     template='swingtime/event_detail.html',
     event_form_class=forms.EventForm,
-    recurrence_form_class=forms.MultipleOccurrenceForm
+    recurrence_form_class=forms.MultipleOccurrenceForm,
+    event_class=None,
 ):
     '''
     View an ``Event`` instance and optionally update either the event or its
@@ -62,7 +63,7 @@ def event_view(
     ``recurrence_form``
         a form object for adding occurrences
     '''
-    event = get_object_or_404(Event, pk=pk)
+    event = get_object_or_404(event_class, pk=pk)
     event_form = recurrence_form = None
     if request.method == 'POST':
         if '_update' in request.POST:
@@ -93,7 +94,8 @@ def occurrence_view(
     event_pk,
     pk,
     template='swingtime/occurrence_detail.html',
-    form_class=forms.SingleOccurrenceForm
+    form_class=forms.SingleOccurrenceForm,
+    occurrence_class=None
 ):
     '''
     View a specific occurrence and optionally handle any updates.
@@ -106,7 +108,7 @@ def occurrence_view(
     ``form``
         a form object for updating the occurrence
     '''
-    occurrence = get_object_or_404(Occurrence, pk=pk, event__pk=event_pk)
+    occurrence = get_object_or_404(occurrence_class, pk=pk, event__pk=event_pk)
     if request.method == 'POST':
         form = form_class(request.POST, instance=occurrence)
         if form.is_valid():
@@ -212,7 +214,9 @@ def day_view(request, year, month, day, template='swingtime/daily_view.html', **
 
     '''
     dt = datetime(int(year), int(month), int(day))
-    return _datetime_view(request, template, dt, **params)
+    items = params.pop('items', None)
+    timeslot_factory = params.pop('timeslot_factory', None)
+    return _datetime_view(request, template, dt, timeslot_factory, items, params)
 
 
 def today_view(request, template='swingtime/daily_view.html', **params):
@@ -220,10 +224,25 @@ def today_view(request, template='swingtime/daily_view.html', **params):
     See documentation for function``_datetime_view``.
 
     '''
-    return _datetime_view(request, template, datetime.now(), **params)
+    items = params.pop('items', None)
+    timeslot_factory = params.pop('timeslot_factory', None)
+    return _datetime_view(
+        request,
+        template,
+        datetime.now(),
+        timeslot_factory,
+        items,
+        params
+    )
 
 
-def year_view(request, year, template='swingtime/yearly_view.html', queryset=None):
+def year_view(
+    request,
+    year,
+    template='swingtime/yearly_view.html',
+    queryset=None,
+    occurrence_class=None
+):
     '''
 
     Context parameters:
@@ -245,7 +264,12 @@ def year_view(request, year, template='swingtime/yearly_view.html', queryset=Non
 
     '''
     year = int(year)
-    queryset = queryset._clone() if queryset is not None else Occurrence.objects.select_related()
+
+    if queryset is None:
+        queryset = occurrence_class.objects.select_related()
+    else:
+        queryset = queryset._clone()
+
     occurrences = queryset.filter(
         models.Q(start_time__year=year) |
         models.Q(end_time__year=year)
@@ -272,7 +296,8 @@ def month_view(
     year,
     month,
     template='swingtime/monthly_view.html',
-    queryset=None
+    queryset=None,
+    occurrence_class=None
 ):
     '''
     Render a tradional calendar grid view with temporal navigation variables.
@@ -303,9 +328,13 @@ def month_view(
     last_day = max(cal[-1])
     dtend = datetime(year, month, last_day)
 
+    if queryset is None:
+        queryset = occurrence_class.objects.select_related()
+    else:
+        queryset = queryset._clone()
+
     # TODO Whether to include those occurrences that started in the previous
     # month but end in this month?
-    queryset = queryset._clone() if queryset is not None else Occurrence.objects.select_related()
     occurrences = queryset.filter(start_time__year=year, start_time__month=month)
 
     def start_day(o):

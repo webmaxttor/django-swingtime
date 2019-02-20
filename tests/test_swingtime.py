@@ -81,15 +81,21 @@ class TestTable:
                 else:
                     out.append(cellfmt.format(''))
             out.append('|\n')
-            
+
         return ''.join(out)
 
     def _do_test(self, start, end, expect):
-        start   = time(*start)
+        start = time(*start)
         dtstart = datetime.combine(self.dt, start)
-        etd     = datetime.combine(self.dt, time(*end)) - dtstart
-        table   = utils.create_timeslot_table(self.dt, start_time=start, end_time_delta=etd)
-        actual  = self.table_as_string(table)
+        etd = datetime.combine(self.dt, time(*end)) - dtstart
+        table = utils.create_timeslot_table(
+            self.dt,
+            start_time=start,
+            end_time_delta=etd,
+            occurrence_class=Occurrence,
+            event_type_class=EventType
+        )
+        actual = self.table_as_string(table)
         assert actual == expect
 
     def test_slot_table_1(self, events):
@@ -100,10 +106,10 @@ class TestTable:
 
     def test_slot_table_3(self, events):
         self._do_test((16,0), (17,30), expected_table_3)
-    
+
     def test_slot_table_4(self, events):
         self._do_test((18,0), (19,30), expected_table_4)
-    
+
     def test_slot_table_5(self, events):
         self._do_test((16,30), (16,30), expected_table_5)
 
@@ -127,7 +133,7 @@ class TestNewEventForm:
             freq='2',
             month_ordinal='1'
         )
-        
+
         evt_form = EventForm(data)
         occ_form = MultipleOccurrenceForm(data)
         assert True == evt_form.is_valid()
@@ -138,7 +144,7 @@ class TestNewEventForm:
         evt = occ_form.save(evt_form.save())
         assert evt.occurrence_set.count() == 2
         assert occ_form.cleaned_data['start_time'] == datetime(2008, 12, 11, 8)
-    
+
     def test_freq(self, play_type):
         e = Event.objects.create(title='FIRE BAD!', description='***', event_type=play_type)
         dtstart = datetime(2015,2,12)
@@ -188,15 +194,15 @@ class TestNewEventForm:
 
 @pytest.mark.django_db
 class TestCreation:
-    
+
     def test_1(self):
         et = EventType.objects.create(abbr='foo', label='Foo')
         assert et.abbr == 'foo'
-        
+
         e = Event.objects.create(title='Hello, world', description='Happy New Year', event_type=et)
         assert e.event_type == et
         assert e.get_absolute_url() == '/events/{}/'.format(e.id)
-        
+
         e.add_occurrences(datetime(2008,1,1), datetime(2008,1,1,1), freq=rrule.YEARLY, count=7)
         occs = list(e.occurrence_set.all())
         assert len(occs) == 7
@@ -204,16 +210,16 @@ class TestCreation:
         for i in range(7):
             o = occs[i]
             assert o.start_time.year == 2008 + i
-        
+
     def test_2(self):
         et = EventType.objects.create(abbr='bar', label='Bar')
         assert str(et) == 'Bar'
-        
+
         e = create_event('Bicycle repairman', event_type=et)
         assert str(e) == 'Bicycle repairman'
         assert e.occurrence_set.count() == 1
         assert e.daily_occurrences().count() == 1
-    
+
     def test_3(self):
         e = create_event(
             'Something completely different',
@@ -231,8 +237,8 @@ class TestCreation:
         for i, day in zip(range(len(occs)), [2, 4, 9, 11, 16, 18, 23, 25, 30]):
             o = occs[i]
             assert day == o.start_time.day
-    
-    
+
+
     def test_4(self):
         e = create_event('This parrot has ceased to be!', ('blue', 'Blue'), count=3)
         occs = list(e.upcoming_occurrences())
@@ -243,11 +249,11 @@ class TestCreation:
     def test_6(self):
         et = EventType.objects.create(abbr='foo', label='Foo')
         assert et.abbr == 'foo'
-        
+
         e = Event.objects.create(title='Yet another event', description="with tons of occurrences", event_type=et)
         assert e.event_type == et
         assert e.get_absolute_url() == '/events/{}/'.format(e.id)
-        
+
         e.add_occurrences(
             datetime(2008,1,1),
             datetime(2008,1,1,1),
@@ -259,46 +265,46 @@ class TestCreation:
 
 
 class TestMisc:
-    
+
     def test_version(self):
         V = swingtime.VERSION
         assert swingtime.get_version() == '.'.join([str(i) for i in V])
-    
+
     def test_month_boundaries(self):
         dt = datetime(2012,2,15)
         start, end = utils.month_boundaries(dt)
         assert start == datetime(2012,2,1)
         assert end == datetime(2012,2,29)
-    
+
 
 @pytest.mark.django_db
-class TestViews:    
+class TestViews:
 
     def test_views(self, client, occurence):
         # r'^(?:calendar/)?$', views.today_view
         r = client.get(reverse('swingtime-today'))
         assert r.status_code == 200
-        
+
         # r'^calendar/(?P<year>\d{4})/$', views.year_view
         r = client.get(reverse('swingtime-yearly-view', args=[2018]))
         assert r.status_code == 200
-        
+
         # r'^calendar/(\d{4})/(0?[1-9]|1[012])/$', views.month_view
         r = client.get(reverse('swingtime-monthly-view', args=[2018, 3]))
         assert r.status_code == 200
-        
+
         # r'^calendar/(\d{4})/(0?[1-9]|1[012])/([0-3]?\d)/$', views.day_view
         r = client.get(reverse('swingtime-daily-view', args=[2018,3,18]))
         assert r.status_code == 200
-        
+
         # r'^events/$', views.event_listing
         r = client.get(reverse('swingtime-events'))
         assert r.status_code == 200
-        
+
         # r'^events/add/$', views.add_event
         r = client.get(reverse('swingtime-add-event') + '?dtstart=20180318')
         assert r.status_code == 200
-        
+
         r = client.get(reverse('swingtime-add-event') + '?dtstart=BAD')
         assert r.status_code == 200
 
@@ -327,7 +333,7 @@ class TestViews:
         )
         assert r.status_code == 200
 
-        
+
         # r'^events/(\d+)/(\d+)/$', views.occurrence_view
         r = client.get(reverse('swingtime-occurrence', args=[
             occurence.event.id,
@@ -348,7 +354,7 @@ class TestViews:
             'start_time_0_month': start.month,
             'start_time_0_year': start.year,
             'start_time_1': str(start.time())
-        }            
+        }
         r = client.post(reverse('swingtime-occurrence', args=[
             occurence.event.id,
             occurence.id
