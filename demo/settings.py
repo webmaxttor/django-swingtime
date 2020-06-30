@@ -15,7 +15,7 @@ sys.path.extend([
     os.path.abspath('..'), # relative location of swingtime app
 ])
 
-DEBUG = True
+DEBUG = False
 DATABASES = {'default': {
     'ENGINE': 'django.db.backends.sqlite3',
     'NAME': 'karate.db',
