@@ -3,8 +3,10 @@ import itertools
 import logging
 from datetime import datetime, timedelta, time
 from dateutil import parser
+
 from django import http
 from django.db import models
+from django.utils import timezone
 from django.template.context import RequestContext
 from django.shortcuts import get_object_or_404, render
 
@@ -82,7 +84,7 @@ def event_view(
         'event': event,
         'event_form': event_form or event_form_class(instance=event),
         'recurrence_form': recurrence_form or recurrence_form_class(
-            initial={'dtstart': datetime.now()}
+            initial={'dtstart': timezone.now()}
         )
     }
     return render(request, template, data)
@@ -157,7 +159,7 @@ def add_event(
                 # TODO: A badly formatted date is passed to add_event
                 logging.warning(exc)
 
-        dtstart = dtstart or datetime.now()
+        dtstart = dtstart or timezone.now()
         event_form = event_form_class()
         recurrence_form = recurrence_form_class(initial={'dtstart': dtstart})
 
@@ -211,7 +213,7 @@ def day_view(request, year, month, day, template='swingtime/daily_view.html', **
     See documentation for function``_datetime_view``.
 
     '''
-    dt = datetime(int(year), int(month), int(day))
+    dt = timezone.make_aware(datetime(int(year), int(month), int(day)))
     return _datetime_view(request, template, dt, **params)
 
 
@@ -220,7 +222,7 @@ def today_view(request, template='swingtime/daily_view.html', **params):
     See documentation for function``_datetime_view``.
 
     '''
-    return _datetime_view(request, template, datetime.now(), **params)
+    return _datetime_view(request, template, timezone.now(), **params)
 
 
 def year_view(request, year, template='swingtime/yearly_view.html', queryset=None):
@@ -313,7 +315,7 @@ def month_view(
 
     by_day = dict([(dt, list(o)) for dt, o in itertools.groupby(occurrences, start_day)])
     data = {
-        'today':      datetime.now(),
+        'today':      timezone.now(),
         'calendar':   [[(d, by_day.get(d, [])) for d in row] for row in cal],
         'this_month': dtstart,
         'next_month': dtstart + timedelta(days=+last_day),

@@ -2,7 +2,9 @@
 Convenience forms for adding and updating ``Event`` and ``Occurrence``s.
 '''
 from datetime import datetime, date, time, timedelta
+
 from django import forms
+from django.utils import timezone
 from django.forms.utils import to_current_timezone
 from django.utils.translation import ugettext_lazy as _
 from django.forms.widgets import SelectDateWidget
@@ -111,7 +113,7 @@ def timeslot_options(
     12-hour temporal representation of that offset.
 
     '''
-    dt = datetime.combine(date.today(), time(0))
+    dt = utils.today_aware()
     dtstart = datetime.combine(dt.date(), start_time)
     dtend = dtstart + end_delta
     options = []
@@ -136,8 +138,13 @@ def timeslot_offset_options(
     start of the day and a 12-hour temporal representation of that offset.
 
     '''
-    dt = datetime.combine(date.today(), time(0))
-    dtstart = datetime.combine(dt.date(), start_time)
+    dt = utils.today_aware()
+    dtstart = dt.replace(
+        hour=start_time.hour,
+        minute=start_time.minute,
+        second=start_time.second,
+        microsecond=start_time.microsecond
+    )
     dtend = dtstart + end_delta
     options = []
 
@@ -197,7 +204,7 @@ class SplitDateTimeWidget(forms.MultiWidget):
 class MultipleOccurrenceForm(forms.Form):
     day = forms.DateField(
         label=_('Date'),
-        initial=date.today,
+        initial=utils.today_aware,
         widget=SelectDateWidget()
     )
 
@@ -228,7 +235,7 @@ class MultipleOccurrenceForm(forms.Form):
 
     until = forms.DateField(
         required=False,
-        initial=date.today,
+        initial=utils.today_aware(),
         widget=SelectDateWidget()
     )
 
@@ -320,7 +327,9 @@ class MultipleOccurrenceForm(forms.Form):
 
     def clean(self):
         if 'day' in self.cleaned_data:
-            day = datetime.combine(self.cleaned_data['day'], time(0))
+            day = self.cleaned_data['day']
+            day = timezone.make_aware(datetime.combine(day, time(0)))
+
             self.cleaned_data['start_time'] = day + timedelta(
                 seconds=self.cleaned_data['start_time_delta']
             )
@@ -354,7 +363,12 @@ class MultipleOccurrenceForm(forms.Form):
         )
 
         if data['repeats'] == 'until':
-            params['until'] = data['until']
+            until = data['until']
+            if isinstance(until, date):
+                until = datetime.combine(until, time(0))
+            if timezone.is_naive(until):
+                until = timezone.make_aware(until)
+            params['until'] = until
         else:
             params['count'] = data.get('count', 1)
 

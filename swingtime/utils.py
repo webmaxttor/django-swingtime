@@ -6,12 +6,22 @@ from collections import defaultdict
 from datetime import datetime, date, time, timedelta
 import itertools
 
+from django.utils import timezone
 from django.db.models.query import QuerySet
 from django.utils.safestring import mark_safe
 
 from dateutil import rrule
 from .conf import swingtime_settings
 from .models import EventType, Occurrence
+
+
+def today_aware():
+    return timezone.now().replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0
+    )
 
 
 def time_delta_total_seconds(time_delta):
@@ -29,9 +39,9 @@ def month_boundaries(dt=None):
     dates of the current month or using ``dt`` as a reference.
 
     '''
-    dt = dt or date.today()
+    dt = dt or today_aware()
     wkday, ndays = calendar.monthrange(dt.year, dt.month)
-    start = datetime(dt.year, dt.month, 1)
+    start = timezone.make_aware(datetime(dt.year, dt.month, 1))
     return (start, start + timedelta(ndays - 1))
 
 
@@ -125,7 +135,7 @@ def create_timeslot_table(
       handle the custom output via its __unicode__ method.
 
     '''
-    dt = dt or datetime.now()
+    dt = dt or timezone.now()
     start_time = start_time.replace(tzinfo=dt.tzinfo) if not start_time.tzinfo else start_time
     dtstart = datetime.combine(dt.date(), start_time)
     dtend = dtstart + end_time_delta

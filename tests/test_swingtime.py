@@ -3,12 +3,20 @@ import pytest
 from pprint import pformat
 from datetime import datetime, timedelta, date, time
 from dateutil import rrule
+
+from django.conf import settings
 from django.urls import reverse
+from django.utils.timezone import make_aware
 from django.forms.models import model_to_dict
+
+import pytz
+
 import swingtime
 from swingtime import utils
 from swingtime.models import *
 from swingtime.forms import EventForm, MultipleOccurrenceForm
+
+
 
 expected_table_1 = '''\
 | 15:00 |          |          |          |          |          |
@@ -67,7 +75,7 @@ class TestTable:
 
     @property
     def dt(self):
-        return datetime(2008,12,11)
+        return make_aware(datetime(2008, 12, 11))
 
     def table_as_string(self, table):
         timefmt = '| {:<5s} '
@@ -93,19 +101,19 @@ class TestTable:
         assert actual == expect
 
     def test_slot_table_1(self, events):
-        self._do_test((15,0), (18,0), expected_table_1)
+        self._do_test((15, 0), (18, 0), expected_table_1)
 
     def test_slot_table_2(self, events):
-        self._do_test((15,30), (17,30), expected_table_2)
+        self._do_test((15, 30), (17, 30), expected_table_2)
 
     def test_slot_table_3(self, events):
-        self._do_test((16,0), (17,30), expected_table_3)
+        self._do_test((16, 0), (17, 30), expected_table_3)
     
     def test_slot_table_4(self, events):
-        self._do_test((18,0), (19,30), expected_table_4)
+        self._do_test((18, 0), (19, 30), expected_table_4)
     
     def test_slot_table_5(self, events):
-        self._do_test((16,30), (16,30), expected_table_5)
+        self._do_test((16, 30), (16, 30), expected_table_5)
 
 
 @pytest.mark.django_db
@@ -137,13 +145,13 @@ class TestNewEventForm:
 
         evt = occ_form.save(evt_form.save())
         assert evt.occurrence_set.count() == 2
-        assert occ_form.cleaned_data['start_time'] == datetime(2008, 12, 11, 8)
+        assert occ_form.cleaned_data['start_time'] == make_aware(datetime(2008, 12, 11, 8))
     
     def test_freq(self, play_type):
         e = Event.objects.create(title='FIRE BAD!', description='***', event_type=play_type)
-        dtstart = datetime(2015,2,12)
+        dtstart = make_aware(datetime(2015, 2, 12))
         data = dict(
-            day=dtstart.date(),
+            day=dtstart,
             freq=rrule.MONTHLY,
             month_option='on',
             month_ordinal=1,
@@ -151,7 +159,7 @@ class TestNewEventForm:
             repeats='until',
             start_time_delta='28800',
             end_time_delta='29700',
-            until=datetime(2015, 6, 10)
+            until=datetime(2015, 6, 10, tzinfo=pytz.utc)
         )
         mof = MultipleOccurrenceForm(data, initial={'dtstart': dtstart})
         assert True == mof.is_valid()
@@ -163,7 +171,7 @@ class TestNewEventForm:
 
     def test_yearly(self, play_type):
         e = Event.objects.create(title='YEARLY', description='YYYY', event_type=play_type)
-        dtstart = datetime(2018,3,18)
+        dtstart = make_aware(datetime(2018, 3, 18))
         data = dict(
             day=dtstart.date(),
             freq=rrule.YEARLY,
@@ -181,7 +189,7 @@ class TestNewEventForm:
         assert True == mof.is_valid()
 
         mof.save(e)
-        expected = [date(2018,3,18), date(2019,3,17), date(2020,3,15)]
+        expected = [date(2018, 3, 18), date(2019, 3, 17), date(2020, 3, 15)]
         actual = [o.start_time.date() for o in e.occurrence_set.all()]
         assert expected == actual
 
@@ -197,10 +205,15 @@ class TestCreation:
         assert e.event_type == et
         assert e.get_absolute_url() == '/events/{}/'.format(e.id)
         
-        e.add_occurrences(datetime(2008,1,1), datetime(2008,1,1,1), freq=rrule.YEARLY, count=7)
+        e.add_occurrences(
+            make_aware(datetime(2008, 1, 1)),
+            make_aware(datetime(2008, 1, 1, 1)),
+            freq=rrule.YEARLY,
+            count=7
+        )
         occs = list(e.occurrence_set.all())
         assert len(occs) == 7
-        assert str(occs[0]) == 'Hello, world: 2008-01-01T00:00:00'
+        assert str(occs[0]) == 'Hello, world: 2008-01-01T00:00:00+00:00'
         for i in range(7):
             o = occs[i]
             assert o.start_time.year == 2008 + i
@@ -218,11 +231,11 @@ class TestCreation:
         e = create_event(
             'Something completely different',
             event_type=('abbr', 'Abbreviation'),
-            start_time=datetime(2008,12,1, 12),
+            start_time=make_aware(datetime(2008, 12, 1, 12)),
             note='Here it is',
             freq=rrule.WEEKLY,
             byweekday=(rrule.TU, rrule.TH),
-            until=datetime(2008,12,31)
+            until=make_aware(datetime(2008, 12, 31), pytz.utc)
         )
         assert True == isinstance(e.event_type, EventType)
         assert e.event_type.abbr == 'abbr'
@@ -249,10 +262,10 @@ class TestCreation:
         assert e.get_absolute_url() == '/events/{}/'.format(e.id)
         
         e.add_occurrences(
-            datetime(2008,1,1),
-            datetime(2008,1,1,1),
+            make_aware(datetime(2008, 1, 1)),
+            make_aware(datetime(2008, 1, 1, 1)),
     		freq=rrule.DAILY,
-            until=datetime(2020,12,31)
+            until=datetime(2020, 12, 31, tzinfo=pytz.utc)
         )
         occs = list(e.occurrence_set.all())
         assert len(occs) == 4749
@@ -265,36 +278,41 @@ class TestMisc:
         assert swingtime.get_version() == '.'.join([str(i) for i in V])
     
     def test_month_boundaries(self):
-        dt = datetime(2012,2,15)
+        dt = datetime(2012, 2, 15)
         start, end = utils.month_boundaries(dt)
-        assert start == datetime(2012,2,1)
-        assert end == datetime(2012,2,29)
+        assert start == make_aware(datetime(2012, 2, 1))
+        assert end == make_aware(datetime(2012, 2, 29))
     
 
 @pytest.mark.django_db
 class TestViews:    
 
-    def test_views(self, client, occurence):
+    def test_today(self, client, occurence):
         # r'^(?:calendar/)?$', views.today_view
         r = client.get(reverse('swingtime-today'))
         assert r.status_code == 200
-        
+
+    def test_yearly(self, client, occurence):
         # r'^calendar/(?P<year>\d{4})/$', views.year_view
         r = client.get(reverse('swingtime-yearly-view', args=[2018]))
         assert r.status_code == 200
-        
+
+    def test_monthly(self, client, occurence):
         # r'^calendar/(\d{4})/(0?[1-9]|1[012])/$', views.month_view
         r = client.get(reverse('swingtime-monthly-view', args=[2018, 3]))
         assert r.status_code == 200
-        
+
+    def test_daily(self, client, occurence):
         # r'^calendar/(\d{4})/(0?[1-9]|1[012])/([0-3]?\d)/$', views.day_view
-        r = client.get(reverse('swingtime-daily-view', args=[2018,3,18]))
+        r = client.get(reverse('swingtime-daily-view', args=[2018, 3, 18]))
         assert r.status_code == 200
-        
+
+    def test_events(self, client, occurence):
         # r'^events/$', views.event_listing
         r = client.get(reverse('swingtime-events'))
         assert r.status_code == 200
-        
+
+    def test_add_event(self, client, occurence):
         # r'^events/add/$', views.add_event
         r = client.get(reverse('swingtime-add-event') + '?dtstart=20180318')
         assert r.status_code == 200
@@ -305,6 +323,7 @@ class TestViews:
         r = client.post(reverse('swingtime-add-event'))
         assert r.status_code == 200
 
+    def test_event(self, client, occurence):
         # r'^events/(\d+)/$', views.event_view
         r = client.get(reverse('swingtime-event', args=[occurence.event.id]))
         assert r.status_code == 200
@@ -327,7 +346,7 @@ class TestViews:
         )
         assert r.status_code == 200
 
-        
+    def test_occurrence(self, client, occurence):
         # r'^events/(\d+)/(\d+)/$', views.occurrence_view
         r = client.get(reverse('swingtime-occurrence', args=[
             occurence.event.id,
