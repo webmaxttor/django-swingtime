@@ -1,11 +1,10 @@
 import calendar
 import itertools
 import logging
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta
 from dateutil import parser
 from django import http
 from django.db import models
-from django.template.context import RequestContext
 from django.shortcuts import get_object_or_404, render
 
 from .models import Event, Occurrence
@@ -199,9 +198,9 @@ def _datetime_view(
     params = params or {}
 
     return render(request, template, {
-        'day':       dt,
-        'next_day':  dt + timedelta(days=+1),
-        'prev_day':  dt + timedelta(days=-1),
+        'day': dt,
+        'next_day': dt + timedelta(days=+1),
+        'prev_day': dt + timedelta(days=-1),
         'timeslots': timeslot_factory(dt, items, **params)
     })
 
@@ -246,10 +245,7 @@ def year_view(request, year, template='swingtime/yearly_view.html', queryset=Non
     '''
     year = int(year)
     queryset = queryset._clone() if queryset is not None else Occurrence.objects.select_related()
-    occurrences = queryset.filter(
-        models.Q(start_time__year=year) |
-        models.Q(end_time__year=year)
-    )
+    occurrences = queryset.filter(models.Q(start_time__year=year) | models.Q(end_time__year=year))
 
     def group_key(o):
         return datetime(
@@ -301,7 +297,6 @@ def month_view(
     cal = calendar.monthcalendar(year, month)
     dtstart = datetime(year, month, 1)
     last_day = max(cal[-1])
-    dtend = datetime(year, month, last_day)
 
     # TODO Whether to include those occurrences that started in the previous
     # month but end in this month?
@@ -313,8 +308,8 @@ def month_view(
 
     by_day = dict([(dt, list(o)) for dt, o in itertools.groupby(occurrences, start_day)])
     data = {
-        'today':      datetime.now(),
-        'calendar':   [[(d, by_day.get(d, [])) for d in row] for row in cal],
+        'today': datetime.now(),
+        'calendar': [[(d, by_day.get(d, [])) for d in row] for row in cal],
         'this_month': dtstart,
         'next_month': dtstart + timedelta(days=+last_day),
         'last_month': dtstart + timedelta(days=-1),

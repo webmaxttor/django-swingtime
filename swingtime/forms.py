@@ -9,7 +9,7 @@ from django.forms.widgets import SelectDateWidget
 
 from dateutil import rrule
 from .conf import swingtime_settings
-from .models import *
+from .models import Event, Occurrence
 from . import utils
 
 WEEKDAY_SHORT = (
@@ -33,30 +33,30 @@ WEEKDAY_LONG = (
 )
 
 MONTH_LONG = (
-    (1,  _('January')),
-    (2,  _('February')),
-    (3,  _('March')),
-    (4,  _('April')),
-    (5,  _('May')),
-    (6,  _('June')),
-    (7,  _('July')),
-    (8,  _('August')),
-    (9,  _('September')),
+    (1, _('January')),
+    (2, _('February')),
+    (3, _('March')),
+    (4, _('April')),
+    (5, _('May')),
+    (6, _('June')),
+    (7, _('July')),
+    (8, _('August')),
+    (9, _('September')),
     (10, _('October')),
     (11, _('November')),
     (12, _('December')),
 )
 
 MONTH_SHORT = (
-    (1,  _('Jan')),
-    (2,  _('Feb')),
-    (3,  _('Mar')),
-    (4,  _('Apr')),
-    (5,  _('May')),
-    (6,  _('Jun')),
-    (7,  _('Jul')),
-    (8,  _('Aug')),
-    (9,  _('Sep')),
+    (1, _('Jan')),
+    (2, _('Feb')),
+    (3, _('Mar')),
+    (4, _('Apr')),
+    (5, _('May')),
+    (6, _('Jun')),
+    (7, _('Jul')),
+    (8, _('Aug')),
+    (9, _('Sep')),
     (10, _('Oct')),
     (11, _('Nov')),
     (12, _('Dec')),
@@ -64,18 +64,18 @@ MONTH_SHORT = (
 
 
 ORDINAL = (
-    (1,  _('first')),
-    (2,  _('second')),
-    (3,  _('third')),
-    (4,  _('fourth')),
+    (1, _('first')),
+    (2, _('second')),
+    (3, _('third')),
+    (4, _('fourth')),
     (-1, _('last'))
 )
 
 FREQUENCY_CHOICES = (
-    (rrule.DAILY,   _('Day(s)')),
-    (rrule.WEEKLY,  _('Week(s)')),
+    (rrule.DAILY, _('Day(s)')),
+    (rrule.WEEKLY, _('Week(s)')),
     (rrule.MONTHLY, _('Month(s)')),
-    (rrule.YEARLY,  _('Year(s)')),
+    (rrule.YEARLY, _('Year(s)')),
 )
 
 REPEAT_CHOICES = (

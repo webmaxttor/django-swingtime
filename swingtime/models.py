@@ -1,11 +1,10 @@
-from datetime import datetime, date, timedelta
+from datetime import datetime
 from dateutil import rrule
 
 from django.utils.translation import ugettext_lazy as _
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.urls import reverse
-from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 
 from .conf import swingtime_settings
@@ -150,12 +149,10 @@ class OccurrenceManager(models.Manager):
             models.Q(
                 start_time__gte=start,
                 start_time__lte=end,
-            ) |
-            models.Q(
+            ) | models.Q(
                 end_time__gte=start,
                 end_time__lte=end,
-            ) |
-            models.Q(
+            ) | models.Q(
                 start_time__lt=start,
                 end_time__gt=end
             )
